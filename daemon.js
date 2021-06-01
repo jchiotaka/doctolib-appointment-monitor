@@ -2,6 +2,9 @@ const open = require('open');
 const axios = require('axios');
 const audio = require('play-sound')(opts = {});
 const readline = require('readline');
+const fs = require('fs');
+
+const error = fs.createWriteStream('./daemon.error.log', { flags: 'a' });
 
 class ImpfDaemon {
   sources;
@@ -11,23 +14,29 @@ class ImpfDaemon {
     this.sources = sources;
   }
 
-  async hasAppointments(xhrLink) {
+  async getAppointments(xhrLink) {
     try {
       const response = await axios.get(xhrLink);
 
-      if (response?.data?.total > 0) {
-        return true;
+      if (response?.data) {
+        return response.data;
       }
 
-      return false;
+      return {};
     }
 
     catch (err) {
-      console.log(err);
-    }
+      error.write(`\n${JSON.stringify(err)}\n`);
 
+      return { error: true };
+    }
   }
 
+  /**
+   * Will start monitoring the appointments.
+   * Change cooldown for less or more requests per second.
+   * (Lower number greater chances to get an appointment notification, or blocked :D)
+   */
   async monitorAppointments() {
     let continueSearch = true;
     console.log('\n\nMonitoring\n');
@@ -35,22 +44,29 @@ class ImpfDaemon {
     do {
       for (let { xhrLink, bookingLink } of this.sources) {
         if (continueSearch) {
-          const hasAppointments = await this.hasAppointments(xhrLink);
-
-          process.stdout.write('.');
+          const appointments = await this.getAppointments(xhrLink);
+          
+          if (!appointments || appointments.error) {
+            process.stdout.write('e');  
+          } else {
+            process.stdout.write(`${appointments.total ? appointments.total : '.'}`);
+          }
   
-          if (hasAppointments) {
+          if (Boolean(appointments.total)) {
             open(bookingLink);
   
             audio.play('./alert.mp3');
             process.stdout.write('√');
-  
+
+            console.log('\n\n');
+            console.log(bookingLink);
+
             continueSearch = await this.requestInput('Appointment found, continue searching? (Y/n)');
           }
         }
-        
       }
-      await this.cooldown(1000);
+      
+      await this.cooldown(100);
     } while (continueSearch);
   }
 
