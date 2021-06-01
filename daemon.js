@@ -1,11 +1,7 @@
-const open = require('open');
-const axios = require('axios');
 const audio = require('play-sound')(opts = {});
 const readline = require('readline');
 const fs = require('fs');
 const puppeteer = require('puppeteer');
-
-const error = fs.createWriteStream('./daemon.error.log', { flags: 'a' });
 
 class ImpfDaemon {
   sources;
@@ -18,29 +14,6 @@ class ImpfDaemon {
     this.sources = sources;
   }
 
-  async getAppointments(xhrLink) {
-    try {
-      const response = await axios.get(xhrLink);
-
-      if (response?.data) {
-        return response.data;
-      }
-
-      return {};
-    }
-
-    catch (err) {
-      error.write(`\n${JSON.stringify(err)}\n`);
-
-      return { error: true };
-    }
-  }
-
-  /**
-   * Will start monitoring the appointments.
-   * Change cooldown for less or more requests per second.
-   * (Lower number greater chances to get an appointment notification, or blocked :D)
-   */
   async prepareBrowser() {
     this.browser = await puppeteer.launch(
       { headless: false, 
@@ -129,9 +102,6 @@ class ImpfDaemon {
     }
   }
 
-  showProgress(string) {
-    process.stdout.write(string || '.');
-  }
 
   requestInput(query) {
     const readLine = readline.createInterface({
