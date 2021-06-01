@@ -59,11 +59,7 @@ class ImpfDaemon {
   }
 
   alert() {
-    if (!this.foundAppointment) {
-      audio.play('./alert.mp3');
-    } else {
-      audio.play('./notify.wav');
-    }
+    audio.play('./notify.wav');
   }
 
   foundLater() {
@@ -100,17 +96,21 @@ class ImpfDaemon {
 
   async monitorPage(page) {
     try {
+      let offset = 0;
       try {
-        (await page.waitForSelector('.availabilities-next-slot', { timeout: 700 })).click();
+        (await page.waitForSelector('.availabilities-next-slot', { timeout: 400 })).click();
         
         this.foundLater();
+        offset = 1000;
         this.switchToPage(page);
       } catch (err) {}
       
-      (await page.waitForSelector('.availabilities-slot', { timeout: 700 })).click();
+      const slot = (await page.waitForSelector('.availabilities-slot', { timeout: 400 + offset }));
+
+      slot.click();
+      this.switchToPage(page);
       
       this.alert();
-      this.switchToPage(page);
       this.foundAppointment = true;
 
       if (await this.requestInput('Appointment found, continue searching? (Y/n)')) {
