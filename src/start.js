@@ -18,10 +18,6 @@ const berlinImpf = {
       bookingLink: `https://www.doctolib.de/institut/berlin/ciz-berlin-berlin?pid=practice-158435`,
     },
   ],
-  credentials: {
-    username: 'a',
-    password: 'b',
-  },
   options: {
     expandScopeToNext: true,
   },
@@ -88,6 +84,5 @@ const hausaertzte = {
     expandScopeToNext: false,
   },
 }
-const daemonInstance = new ImpfDaemon(hausaertzte);
+const daemonInstance = new ImpfDaemon(berlinImpf);
 daemonInstance.browserMonitoring();
-

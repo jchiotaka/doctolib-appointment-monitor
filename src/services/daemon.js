@@ -1,6 +1,7 @@
 const audio = require('sound-play');
 const readline = require('readline');
 const puppeteer = require('puppeteer');
+const path = require('path');
 
 class ImpfDaemon {
   sources;
@@ -43,18 +44,25 @@ class ImpfDaemon {
     try {
       await (await this.page.waitForSelector('#didomi-notice-agree-button')).click();
 
-      audio.play('src/assets/ready.wav');
+      this.playSound('ready.wav')
       return this.page.close();
     } catch (err) {
     }
   }
 
+  /**
+   * One day this will be nicely done in TS with enums
+   */
+  playSound(soundString) {
+    audio.play(path.join(__dirname, `../assets/${soundString}`));
+  }
+
   alert() {
-    audio.play('src/assets/notify.wav');
+    this.playSound('notify.wav');
   }
 
   alertLater() {
-    audio.play('src/assets/subtle.wav');
+    this.playSound('subtle.wav');
   }
 
   async browserMonitoring() {
@@ -94,6 +102,7 @@ class ImpfDaemon {
     }
 
     const retry = () => {
+      this.playSound('tap.wav');
       this.checkForAppointments(source);
     }
 
@@ -137,7 +146,13 @@ class ImpfDaemon {
         this.alert();
       } catch (err) {
         refreshCount++;
-        await page.reload({ waitUntil: ['domcontentloaded', 'networkidle0'] });
+
+        try {
+          await page.reload({ waitUntil: ['domcontentloaded', 'networkidle0'] });
+        } catch (err) {
+          page.close();
+          return retry();
+        }
       }
     }
 
@@ -163,7 +178,6 @@ class ImpfDaemon {
       }
     }
   }
-
 
   requestInput(query) {
     const readLine = readline.createInterface({
