@@ -3,6 +3,9 @@
 This is a small Node.JS project that I maintain (barely) in me free time after work. There are a lot of things missing
 or done quickly as my primary goal is to get an appointment and not write a state of the art scraper tool.
 
+It can be also used for getting an appointment generally for a doctor or praxis on doctolib but there are more things that need to be taken care of (for example select boxes)
+. Check `start.js` for an example.
+
 What it does do for you:
 - It opens a Chromium window
 - It goes to the sources url you provided for the public vaccination centers in berlin (I include some for berlin)
