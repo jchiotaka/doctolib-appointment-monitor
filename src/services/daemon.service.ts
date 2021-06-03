@@ -246,19 +246,4 @@ export default class ImpfDaemon {
       }
     }
   }
-
-  private requestInput(query: string) {
-    const readLine = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-
-    return new Promise(
-      resolve => readLine.question(query, ans => {
-        readLine.close();
-
-        resolve(['y', 'Y'].includes(ans));
-      })
-    );
-  }
 }
