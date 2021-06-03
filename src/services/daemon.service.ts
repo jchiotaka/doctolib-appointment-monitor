@@ -49,18 +49,26 @@ export default class ImpfDaemon {
   }
 
   private async prepare() {
-    this.browser = await this.initializeBrowserInstance({ headless: false });
-
-    const cookiesPage = await this.newPage();
-    await cookiesPage.goto('https://www.doctolib.de');
-
     try {
-      await (await cookiesPage.waitForSelector('#didomi-notice-agree-button'))?.click();
+      this.browser = await this.initializeBrowserInstance({ headless: false });
 
-      this.alert(Alerts.READY);
+      const cookiesPage = await this.newPage();
+      await cookiesPage.goto('https://www.doctolib.de');
 
-      return cookiesPage.close();
+      try {
+        await (await cookiesPage.waitForSelector('#didomi-notice-agree-button'))?.click();
+
+        this.alert(Alerts.READY);
+
+        return cookiesPage.close();
+      } catch (err) {
+        console.error('failed to accept cookies');
+      }
     } catch (err) {
+      console.error('failed to start browser');
+      console.log(err);
+
+      process.exit(999);
     }
   }
 
@@ -82,7 +90,6 @@ export default class ImpfDaemon {
     } || {};
 
     if (this.foundAppointment) {
-      setTimeout(() => retry(), localOptions.delayAfterAppointmentFound);
       return false;
     }
 
@@ -101,11 +108,12 @@ export default class ImpfDaemon {
     } catch (err) {
 
       await page.close();
-      return retry();
+      retry();
+      
+      return;
     }
 
-    // refreshCount will close the page after 10 refreshes as with each refresh the memory consumption increases
-    while (!this.foundAppointment && refreshCount < 10) {
+    while (!this.foundAppointment && refreshCount < 20) {
       try {
         let nextSlotButton;
 
@@ -143,7 +151,7 @@ export default class ImpfDaemon {
         try {
           await page.reload({waitUntil: ['domcontentloaded', 'networkidle0']});
         } catch (err) {
-          await page.close();
+          page.close();
 
           return retry();
         }
@@ -156,39 +164,29 @@ export default class ImpfDaemon {
       return retry();
     }
 
-    if (this.foundAppointment) {
-      if (appointmentIsHere) {
-        const input = await this.requestInput('Continue searching? (y/n)');
-
-        this.foundAppointment = false;
-        await page.close();
-
-        if (input) {
-          return retry();
-        } else {
-          process.exit();
-        }
-      } else {
-        await page.close();
-      }
+    if (this.foundAppointment && !appointmentIsHere) {
+      await page.close();
     }
   }
 
   private async initializeBrowserInstance(options?: BrowserLaunchArgumentOptions) {
-    return puppeteer.launch(
-        {
-          headless: true,
-          defaultViewport: null,
-          args: [`--window-size=${this.options.windowWidth},${this.options.windowHeight}`],
-          ...options,
-        });
+    if (this.options.host) {
+      return puppeteer.connect({
+        browserWSEndpoint: this.options.host,
+      })
+    } else {
+      return puppeteer.launch(
+          {
+            headless: true,
+            defaultViewport: null,
+            args: [`--window-size=${this.options.windowWidth},${this.options.windowHeight}`],
+            ...options,
+          });
+    }
   }
 
   private static getRandomUserAgent(): string {
     const userAgent = new UserAgent({ deviceCategory: 'desktop' });
-
-    console.log(userAgent.toString());
-    console.log(JSON.stringify(userAgent.data, null, 2));
 
     return userAgent.toString();
   }

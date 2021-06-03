@@ -5,6 +5,7 @@ export interface Options {
     windowHeight?: number,
     windowWidth?: number,
     expandScopeToNext?: boolean,
+    host?: string,
 }
 
 export interface Source {
