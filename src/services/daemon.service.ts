@@ -1,13 +1,15 @@
-import {Alerts, Options, Source, Sources} from "../types/daemon.types";
-import Play from 'play-sound';
+import {Options, Source, Sources} from "../types/daemon.types";
 import {Browser, BrowserLaunchArgumentOptions, Page} from 'puppeteer';
 import UserAgent from 'user-agents';
 import puppeteer from 'puppeteer';
-import readline from 'readline';
-import path from 'path';
+import AlertsService from './alerts.service';
+import {Alerts} from "../types/alerts.types";
+import BrowserService from "./browser.service";
 
 export default class ImpfDaemon {
-  readonly audio;
+  readonly alertsService: AlertsService;
+  readonly browserService: BrowserService;
+
   readonly sources: Source[];
   readonly options: Options = {
     elementTimeout: 300,
@@ -32,15 +34,19 @@ export default class ImpfDaemon {
 
     this.sources = sources;
 
-    // @ts-ignore will fix it one day
-    this.audio = new Play();
+   this.browserService = new BrowserService(this.options);
+   this.alertsService = new AlertsService();
+  }
+
+  private alert(type?: Alerts) {
+    this.alertsService.alert(type);
   }
 
   async start() {
     this.alert();
 
     if (!this.browser) {
-      await this.prepare();
+      await this.prepareBrowserEnvironment();
     }
 
     for (const source of this.sources) {
@@ -48,9 +54,9 @@ export default class ImpfDaemon {
     }
   }
 
-  private async prepare() {
+  private async prepareBrowserEnvironment() {
     try {
-      this.browser = await this.initializeBrowserInstance({ headless: false });
+      this.browser = await this.browserService.initializeBrowserInstance({ headless: false });
 
       const cookiesPage = await this.newPage();
       await cookiesPage.goto('https://www.doctolib.de');
@@ -169,22 +175,6 @@ export default class ImpfDaemon {
     }
   }
 
-  private async initializeBrowserInstance(options?: BrowserLaunchArgumentOptions) {
-    if (this.options.host) {
-      return puppeteer.connect({
-        browserWSEndpoint: this.options.host,
-      })
-    } else {
-      return puppeteer.launch(
-          {
-            headless: true,
-            defaultViewport: null,
-            args: [`--window-size=${this.options.windowWidth},${this.options.windowHeight}`],
-            ...options,
-          });
-    }
-  }
-
   private static getRandomUserAgent(): string {
     const userAgent = new UserAgent({ deviceCategory: 'desktop' });
 
@@ -197,34 +187,6 @@ export default class ImpfDaemon {
     }
 
     return false;
-  }
-
-  private alert(alertType?: Alerts) {
-    let soundFile: string;
-
-    switch (alertType) {
-      case Alerts.LOUD:
-        soundFile = `../assets/notify.wav`;
-        break;
-
-      case Alerts.QUIET:
-        soundFile = `../assets/subtle.wav`;
-        break;
-
-      case Alerts.TAP:
-        soundFile = `../assets/tap.wav`;
-        break;
-
-      case Alerts.READY:
-        soundFile = `../assets/ready.wav`;
-        break;
-
-      default:
-        soundFile = `../assets/notify.wav`;
-        break;
-    }
-
-    return this.audio.play(path.join(__dirname, soundFile));
   }
 
   private static async fillInInputs(source: Source, page: Page) {

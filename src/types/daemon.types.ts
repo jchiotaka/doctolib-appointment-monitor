@@ -24,10 +24,3 @@ export interface Sources {
     sources: Source[],
     options?: Options,
 }
-
-export enum Alerts {
-    LOUD,
-    QUIET,
-    TAP,
-    READY,
-}
