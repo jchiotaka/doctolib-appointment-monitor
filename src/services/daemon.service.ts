@@ -1,7 +1,6 @@
-import {Options, Source, Sources} from "../types/daemon.types";
-import {Browser, BrowserLaunchArgumentOptions, Page} from 'puppeteer';
+import {ElementType, Options, Source, Sources} from "../types/daemon.types";
+import {Browser, Page} from 'puppeteer';
 import UserAgent from 'user-agents';
-import puppeteer from 'puppeteer';
 import AlertsService from './alerts.service';
 import {Alerts} from "../types/alerts.types";
 import BrowserService from "./browser.service";
@@ -25,7 +24,7 @@ export default class ImpfDaemon {
   private browser: Browser | undefined;
 
   constructor(data: Sources) {
-    const {sources, options} = data;
+    const { sources, options } = data;
 
     this.options = {
       ...this.options,
@@ -34,23 +33,37 @@ export default class ImpfDaemon {
 
     this.sources = sources;
 
-   this.browserService = new BrowserService(this.options);
-   this.alertsService = new AlertsService();
+    this.browserService = new BrowserService(this.options);
+    this.alertsService = new AlertsService();
   }
 
   private alert(type?: Alerts) {
     this.alertsService.alert(type);
   }
 
-  async start() {
+  async start(): Promise<boolean> {
     this.alert();
 
     if (!this.browser) {
       await this.prepareBrowserEnvironment();
     }
 
-    for (const source of this.sources) {
-      this.checkForAppointments(source);
+    const promises = [];
+
+    do {
+      for (const source of this.sources) {
+        promises.push(this.initializeAppointmentSearch(source));
+      }
+    } while (!(await Promise.all(promises)).includes(true));
+
+    return false;
+  }
+
+  private async initializeAppointmentSearch(source: Source) {
+    try {
+      return await this.checkForAppointments(source);
+    } catch (err) {
+      return false;
     }
   }
 
@@ -82,6 +95,11 @@ export default class ImpfDaemon {
     if (this.browser) {
       const page = await this.browser.newPage();
       await page.setUserAgent(ImpfDaemon.getRandomUserAgent());
+      await page.setViewport({
+        width: 768,
+        height: 1024,
+        deviceScaleFactor: 1,
+      });
 
       return page;
     } else {
@@ -99,79 +117,69 @@ export default class ImpfDaemon {
       return false;
     }
 
-    const retry = () => {
-      this.alert(Alerts.TAP);
-      this.checkForAppointments(source);
-    }
-
     const page = await this.newPage();
 
     let appointmentIsHere = false;
     let refreshCount = 0;
 
-    try {
-      await page.goto(source.bookingLink, {waitUntil: ['domcontentloaded', 'networkidle0']});
-    } catch (err) {
 
-      await page.close();
-      retry();
-      
-      return;
-    }
-
-    while (!this.foundAppointment && refreshCount < 20) {
+    while (!this.foundAppointment && refreshCount < 15) {
       try {
-        let nextSlotButton;
-
-        await ImpfDaemon.fillInInputs(source, page);
+        await page.goto(source.bookingLink, { waitUntil: ['domcontentloaded', 'networkidle0'] });
+        await this.fillInInputs(source, page);
 
         if (localOptions.expandScopeToNext) {
-          try {
-            nextSlotButton = await page.waitForSelector('.availabilities-next-slot', {timeout: localOptions.elementTimeout});
-            await nextSlotButton?.click();
+          const nextAvailableAppointmentButtonClicked = await this.clickElement(page, '.availabilities-next-slot', localOptions.elementTimeout);
 
+          if (nextAvailableAppointmentButtonClicked) {
             this.alert(Alerts.QUIET);
-
             this.switchToPage(page);
-          } catch (err) {
           }
         }
 
-        const slot = await page.waitForSelector('.availabilities-slot',
-            {
-              // @ts-ignore will fix this too :D
-              timeout: localOptions.elementTimeout + (nextSlotButton ? localOptions.elementTimeoutOffset : 0)
-            }
-        );
+        //try to find first slot on page
+        const firstAppointmentSlotClicked = await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
 
-        await slot?.click();
-
-        this.switchToPage(page);
-        this.foundAppointment = true;
-        appointmentIsHere = true;
-
-        this.alert();
-      } catch (err) {
-        refreshCount++;
-
-        try {
-          await page.reload({waitUntil: ['domcontentloaded', 'networkidle0']});
-        } catch (err) {
-          page.close();
-
-          return retry();
+        if (!this.foundAppointment && firstAppointmentSlotClicked) {
+          this.switchToPage(page);
+          this.alert();
+          this.foundAppointment = true;
+          appointmentIsHere = true;
+          
+          // click second slot to temporarily block appointment
+          await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
         }
+      } finally {
+        refreshCount++
       }
     }
 
     if (!this.foundAppointment) {
       await page.close();
-
-      return retry();
+      return false;
     }
 
     if (this.foundAppointment && !appointmentIsHere) {
       await page.close();
+      return false;
+    }
+
+    return true;
+  }
+
+  private async clickElement(page: Page, selector: string, timeout: number = this.options.elementTimeout as number): Promise<boolean> {
+    try {
+      const slot = await page.waitForSelector(selector,
+        {
+          timeout
+        }
+      );
+
+      await slot?.click();
+
+      return true;
+    } catch (err) {
+      return false;
     }
   }
 
@@ -189,23 +197,34 @@ export default class ImpfDaemon {
     return false;
   }
 
-  private static async fillInInputs(source: Source, page: Page) {
-    const {selects, inputs} = source;
+  private async fillInInputs(source: Source, page: Page): Promise<boolean> {
+    const { elementsToInteract } = source;
 
-    if (selects) {
-      for (const select of selects) {
-        const {selector, value} = select;
+    if (elementsToInteract) {
+      const timeout = this.options?.elementTimeout || 300;
 
-        await page.select(selector, value);
+      for (const element of elementsToInteract) {
+        const { selector, value, type } = element;
+
+        try {
+          switch (type) {
+            case ElementType.SELECT:
+              await page.select(selector, value);
+              break;
+
+            case ElementType.BUTTON:
+              await (await page.waitForSelector(selector, { timeout }))?.click();
+          }
+        } catch(err) {}
+
+        await this.cooldown(500);
       }
     }
 
-    if (inputs) {
-      for (const input of inputs) {
-        const {selector, value} = input;
+    return true;
+  }
 
-        await page.type(selector, value);
-      }
-    }
+  private cooldown(timeout: number): Promise<boolean> {
+    return new Promise(resolve => setTimeout(() => resolve(true), timeout));
   }
 }

@@ -11,16 +11,22 @@ export interface Options {
 export interface Source {
     bookingLink: string,
     options?: Options,
-    selects?: Element[],
-    inputs?: Element[],
+    elementsToInteract?: Element[],
 }
 
 export interface Element {
     selector: string,
+    type: ElementType,
     value: string,
 }
 
 export interface Sources {
     sources: Source[],
     options?: Options,
+}
+
+export enum ElementType {
+    SELECT,
+    INPUT,
+    BUTTON,
 }
