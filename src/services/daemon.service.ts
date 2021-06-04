@@ -61,7 +61,7 @@ export default class ImpfDaemon {
 
   private async initializeAppointmentSearch(source: Source) {
     try {
-      return await this.checkForAppointments(source);
+      return this.checkForAppointments(source);
     } catch (err) {
       return false;
     }
