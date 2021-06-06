@@ -1,11 +1,11 @@
 import { Alerts } from "../types/alerts.types";
 import path from 'path';
-import Play from 'play-sound';
+
+// @ts-ignore
+import * as audio from 'sound-play';
 
 export default class AlertsService {
     // @ts-ignore
-    private audio = new Play();
-
     alert(alertType?: Alerts) {
         let soundFile: string;
     
@@ -31,6 +31,6 @@ export default class AlertsService {
             break;
         }
     
-        return this.audio.play(path.join(__dirname, soundFile));
+        return audio.play(path.join(__dirname, soundFile));
       }
 }

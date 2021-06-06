@@ -1,4 +1,5 @@
 import puppeteer, {BrowserLaunchArgumentOptions} from "puppeteer";
+import { Browser } from "puppeteer";
 import {Options} from "../types/daemon.types";
 
 export default class BrowserService {
@@ -8,17 +9,23 @@ export default class BrowserService {
         this.options = options;
     }
 
-    async initializeBrowserInstance(options?: BrowserLaunchArgumentOptions) {
+    async initializeBrowserInstance(options?: BrowserLaunchArgumentOptions): Promise<Browser> {
         if (this.options.host) {
             return puppeteer.connect({
                 browserWSEndpoint: this.options.host,
             })
         } else {
+            const args = [
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                `--window-size=${this.options.windowWidth},${this.options.windowHeight}`,
+              ];
             return puppeteer.launch(
                 {
                     headless: true,
                     defaultViewport: null,
-                    args: [`--window-size=${this.options.windowWidth},${this.options.windowHeight}`],
+                    args,
                     ...options,
                 });
         }

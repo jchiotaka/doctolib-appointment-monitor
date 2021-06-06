@@ -1,11 +1,12 @@
 export interface Options {
     elementTimeout?: number,
-    elementTimeoutOffset?: number,
     delayAfterAppointmentFound?: number,
     windowHeight?: number,
     windowWidth?: number,
     expandScopeToNext?: boolean,
     host?: string,
+    maxHeapSize?: number,
+    overkill?: boolean,
 }
 
 export interface Source {

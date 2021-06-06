@@ -4,19 +4,21 @@ import UserAgent from 'user-agents';
 import AlertsService from './alerts.service';
 import {Alerts} from "../types/alerts.types";
 import BrowserService from "./browser.service";
+import CliService from "./cli.service";
 
 export default class ImpfDaemon {
   readonly alertsService: AlertsService;
   readonly browserService: BrowserService;
+  readonly cliService: CliService;
 
   readonly sources: Source[];
   readonly options: Options = {
     elementTimeout: 300,
-    elementTimeoutOffset: 1000,
-    delayAfterAppointmentFound: 1000 * 5,
-    windowHeight: 1024,
     windowWidth: 768,
+    windowHeight: 1024,
     expandScopeToNext: false,
+    maxHeapSize: 110,
+    overkill: false,
   };
 
   private foundAppointment = false;
@@ -35,6 +37,7 @@ export default class ImpfDaemon {
 
     this.browserService = new BrowserService(this.options);
     this.alertsService = new AlertsService();
+    this.cliService = new CliService();
   }
 
   private alert(type?: Alerts) {
@@ -50,23 +53,37 @@ export default class ImpfDaemon {
 
     const promises = [];
 
-    do {
-      for (const source of this.sources) {
-        promises.push(this.initializeAppointmentSearch(source));
-      }
-    } while (!(await Promise.all(promises)).includes(true));
+    for (const source of this.sources) {
+      const promise = this.initializeAppointmentSearch(source);
+      promises.push(promise);
+      promise.then((foundAppointment) => {
+        if (foundAppointment) {
+          console.log(foundAppointment);
+        }
+      });
+    }
 
     return false;
   }
 
-  private async initializeAppointmentSearch(source: Source) {
+  private async initializeAppointmentSearch(source: Source): Promise<boolean> {
     try {
-      return this.checkForAppointments(source);
+      const foundAppointment = await this.checkForAppointments(source);
+      
+      if (foundAppointment) {
+        return true;
+      } else {
+        return this.initializeAppointmentSearch(source); // not so good practice, refactor
+      }
     } catch (err) {
       return false;
     }
   }
 
+  /**
+   * TODO: Refactor promise properly
+   * @returns 
+   */
   private async prepareBrowserEnvironment() {
     try {
       this.browser = await this.browserService.initializeBrowserInstance({ headless: false });
@@ -122,12 +139,18 @@ export default class ImpfDaemon {
     let appointmentIsHere = false;
     let refreshCount = 0;
 
+    const bar = this.cliService.create(5, 0);
+    const heapSize = async () => { return Math.ceil((await page.metrics()).JSHeapUsedSize as number / 1000000); };
 
-    while (!this.foundAppointment && refreshCount < 15) {
-      try {
-        await page.goto(source.bookingLink, { waitUntil: ['domcontentloaded', 'networkidle0'] });
+    while (!this.foundAppointment && (await heapSize()) < (localOptions?.maxHeapSize as number)) {
+      try { 
+        bar.update(1, { status: 'Opening page', metrics: await heapSize(), refreshCount });
+        await page.goto(source.bookingLink, { waitUntil: ['domcontentloaded', 'networkidle0'], timeout: 5000 });
+        
+        bar.update(2, { status: 'Filling in inputs' });
         await this.fillInInputs(source, page);
 
+        bar.update(3, { status: 'Checking if next appointment page' });
         if (localOptions.expandScopeToNext) {
           const nextAvailableAppointmentButtonClicked = await this.clickElement(page, '.availabilities-next-slot', localOptions.elementTimeout);
 
@@ -137,10 +160,12 @@ export default class ImpfDaemon {
           }
         }
 
-        //try to find first slot on page
+        bar.update(4, { status: 'Looking for appointments' });
         const firstAppointmentSlotClicked = await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
-
+        
         if (!this.foundAppointment && firstAppointmentSlotClicked) {
+          bar.update(5, { status: 'Appointment found' });
+
           this.switchToPage(page);
           this.alert();
           this.foundAppointment = true;
@@ -149,17 +174,27 @@ export default class ImpfDaemon {
           // click second slot to temporarily block appointment
           await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
         }
+      } catch(err) {
       } finally {
-        refreshCount++
+        bar.update(0, { status: 'Restarting search' });
+        refreshCount++;
       }
     }
 
+    this.browser
+
     if (!this.foundAppointment) {
+      bar.update(5, { status: 'Restarted to reduce memory usage'});
+      bar.stop();
+
       await page.close();
       return false;
     }
 
     if (this.foundAppointment && !appointmentIsHere) {
+      bar.update(5, { status: 'Closed as another appointment is found'});
+      bar.stop();
+
       await page.close();
       return false;
     }
@@ -167,7 +202,9 @@ export default class ImpfDaemon {
     return true;
   }
 
-  private async clickElement(page: Page, selector: string, timeout: number = this.options.elementTimeout as number): Promise<boolean> {
+  private async clickElement(page: Page, selector: string, timeout?: number): Promise<boolean> {
+    timeout = timeout ? timeout : this.options.elementTimeout as number;
+
     try {
       const slot = await page.waitForSelector(selector,
         {
