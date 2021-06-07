@@ -6,7 +6,7 @@ export default class CliService {
 
     constructor() {
         const barFormat = {
-            format: `${colors.yellow('{bar}')} {value}/{total} \t retries: {refreshCount}\t heap: {metrics} \t ${colors.gray('{status}')}`,
+            format: `${colors.yellow('{bar}')} {value}/{total} heap: {metrics} \t ${colors.gray('{status}')}`,
             barCompleteChar: '\u2588',
             barIncompleteChar: '\u2591',
             hideCursor: true
