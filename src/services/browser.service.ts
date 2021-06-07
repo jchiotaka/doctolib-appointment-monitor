@@ -23,8 +23,11 @@ export default class BrowserService {
               ];
             return puppeteer.launch(
                 {
-                    headless: true,
-                    defaultViewport: null,
+                    headless: false,
+                    defaultViewport: {
+                        width: 768,
+                        height: 1024,
+                    },
                     args,
                     ...options,
                 });

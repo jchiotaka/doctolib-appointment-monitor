@@ -6,7 +6,7 @@ export default class CliService {
 
     constructor() {
         const barFormat = {
-            format: `${colors.cyan('{bar}')} {value}/{total} \t retries: {refreshCount}\t heap: {metrics} \t ${colors.gray('{status}')}`,
+            format: `${colors.yellow('{bar}')} {value}/{total} \t retries: {refreshCount}\t heap: {metrics} \t ${colors.gray('{status}')}`,
             barCompleteChar: '\u2588',
             barIncompleteChar: '\u2591',
             hideCursor: true
@@ -23,7 +23,7 @@ export default class CliService {
         return this.bar.create(total, start);
     }
 
-    stop() {
-        this.bar.stop();
+    stop(bar: SingleBar) {
+        this.bar.remove(bar);
     }
 }

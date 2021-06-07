@@ -109,7 +109,7 @@ export default class ImpfDaemon {
   }
 
   private async newPage(): Promise<Page> {
-    if (this.browser) {
+    if (this.browser && !this.foundAppointment) {
       const page = await this.browser.newPage();
       await page.setUserAgent(ImpfDaemon.getRandomUserAgent());
       await page.setViewport({
@@ -181,11 +181,10 @@ export default class ImpfDaemon {
       }
     }
 
-    this.browser
-
     if (!this.foundAppointment) {
       bar.update(5, { status: 'Restarted to reduce memory usage'});
       bar.stop();
+      this.cliService.stop(bar);
 
       await page.close();
       return false;
