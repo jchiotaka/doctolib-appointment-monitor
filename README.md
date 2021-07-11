@@ -32,3 +32,5 @@ As usual:
 npm install
 npm start
 ```
+
+Last time that was checked if it works: 11/06/2021
