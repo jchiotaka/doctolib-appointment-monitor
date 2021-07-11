@@ -1,17 +1,22 @@
-import {ElementType, Options, Source, Sources} from "../types/daemon.types";
-import {Browser, Page} from 'puppeteer';
+import { Browser, Page } from 'puppeteer';
 import UserAgent from 'user-agents';
+import {
+  ElementType, Options, Source, Sources,
+} from '../types/daemon.types';
 import AlertsService from './alerts.service';
-import {Alerts} from "../types/alerts.types";
-import BrowserService from "./browser.service";
-import CliService from "./cli.service";
+import Alerts from '../types/alerts.types';
+import BrowserService from './browser.service';
+import CliService from './cli.service';
 
 export default class ImpfDaemon {
   readonly alertsService: AlertsService;
+
   readonly browserService: BrowserService;
+
   readonly cliService: CliService;
 
   readonly sources: Source[];
+
   readonly options: Options = {
     elementTimeout: 300,
     windowWidth: 768,
@@ -30,7 +35,7 @@ export default class ImpfDaemon {
 
     this.options = {
       ...this.options,
-      ...options || {}
+      ...options || {},
     };
 
     this.sources = sources;
@@ -53,15 +58,16 @@ export default class ImpfDaemon {
 
     const promises = [];
 
-    for (const source of this.sources) {
+    this.sources.forEach((source: Source) => {
       const promise = this.initializeAppointmentSearch(source);
+
       promises.push(promise);
       promise.then((foundAppointment) => {
         if (foundAppointment) {
           console.log(foundAppointment);
         }
       });
-    }
+    });
 
     return false;
   }
@@ -69,12 +75,11 @@ export default class ImpfDaemon {
   private async initializeAppointmentSearch(source: Source): Promise<boolean> {
     try {
       const foundAppointment = await this.checkForAppointments(source);
-      
+
       if (foundAppointment) {
         return true;
-      } else {
-        return this.initializeAppointmentSearch(source); // not so good practice, refactor
       }
+      return await this.initializeAppointmentSearch(source); // not so good practice, refactor
     } catch (err) {
       return false;
     }
@@ -82,7 +87,7 @@ export default class ImpfDaemon {
 
   /**
    * TODO: Refactor promise properly
-   * @returns 
+   * @returns
    */
   private async prepareBrowserEnvironment() {
     try {
@@ -96,15 +101,18 @@ export default class ImpfDaemon {
 
         this.alert(Alerts.READY);
 
-        return cookiesPage.close();
+        return await cookiesPage.close();
       } catch (err) {
         console.error('failed to accept cookies');
+
+        return false;
       }
     } catch (err) {
       console.error('failed to start browser');
       console.log(err);
 
       process.exit(999);
+      return false;
     }
   }
 
@@ -119,9 +127,8 @@ export default class ImpfDaemon {
       });
 
       return page;
-    } else {
-      throw new Error();
     }
+    throw new Error();
   }
 
   private async checkForAppointments(source: Source) {
@@ -140,13 +147,14 @@ export default class ImpfDaemon {
     let refreshCount = 0;
 
     const bar = this.cliService.create(5, 0);
-    const heapSize = async () => { return Math.ceil((await page.metrics()).JSHeapUsedSize as number / 1000000); };
+    const heapSize = async () => Math
+      .ceil((await page.metrics()).JSHeapUsedSize as number / 1000000);
 
     while (!this.foundAppointment && (await heapSize()) < (localOptions?.maxHeapSize as number)) {
-      try { 
+      try {
         bar.update(1, { status: 'Opening page', metrics: await heapSize(), refreshCount });
         await page.goto(source.bookingLink, { waitUntil: ['domcontentloaded', 'networkidle0'], timeout: 5000 });
-        
+
         bar.update(2, { status: 'Filling in inputs' });
         await this.fillInInputs(source, page);
 
@@ -162,7 +170,7 @@ export default class ImpfDaemon {
 
         bar.update(4, { status: 'Looking for appointments' });
         const firstAppointmentSlotClicked = await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
-        
+
         if (!this.foundAppointment && firstAppointmentSlotClicked) {
           bar.update(5, { status: 'Appointment found' });
 
@@ -170,19 +178,18 @@ export default class ImpfDaemon {
           this.alert();
           this.foundAppointment = true;
           appointmentIsHere = true;
-          
+
           // click second slot to temporarily block appointment
           await this.clickElement(page, '.availabilities-slot', localOptions.elementTimeout);
         }
-      } catch(err) {
       } finally {
         bar.update(0, { status: 'Restarting search' });
-        refreshCount++;
+        refreshCount += refreshCount;
       }
     }
 
     if (!this.foundAppointment) {
-      bar.update(5, { status: 'Restarted to reduce memory usage'});
+      bar.update(5, { status: 'Restarted to reduce memory usage' });
       bar.stop();
       this.cliService.stop(bar);
 
@@ -191,7 +198,7 @@ export default class ImpfDaemon {
     }
 
     if (this.foundAppointment && !appointmentIsHere) {
-      bar.update(5, { status: 'Closed as another appointment is found'});
+      bar.update(5, { status: 'Closed as another appointment is found' });
       bar.stop();
 
       await page.close();
@@ -202,14 +209,13 @@ export default class ImpfDaemon {
   }
 
   private async clickElement(page: Page, selector: string, timeout?: number): Promise<boolean> {
-    timeout = timeout ? timeout : this.options.elementTimeout as number;
+    timeout = timeout || this.options.elementTimeout as number;
 
     try {
       const slot = await page.waitForSelector(selector,
         {
-          timeout
-        }
-      );
+          timeout,
+        });
 
       await slot?.click();
 
@@ -244,6 +250,7 @@ export default class ImpfDaemon {
 
         try {
           switch (type) {
+            default:
             case ElementType.SELECT:
               await page.select(selector, value);
               break;
@@ -251,16 +258,18 @@ export default class ImpfDaemon {
             case ElementType.BUTTON:
               await (await page.waitForSelector(selector, { timeout }))?.click();
           }
-        } catch(err) {}
+        } catch (err) {
+          console.log(err);
+        }
 
-        await this.cooldown(500);
+        await ImpfDaemon.cooldown(500);
       }
     }
 
     return true;
   }
 
-  private cooldown(timeout: number): Promise<boolean> {
-    return new Promise(resolve => setTimeout(() => resolve(true), timeout));
+  private static cooldown(timeout: number): Promise<boolean> {
+    return new Promise((resolve) => setTimeout(() => resolve(true), timeout));
   }
 }

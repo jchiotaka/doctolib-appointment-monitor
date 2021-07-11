@@ -1,6 +1,8 @@
-export enum Alerts {
-    LOUD,
-    QUIET,
-    TAP,
-    READY,
+enum Alerts {
+  LOUD,
+  QUIET,
+  TAP,
+  READY,
 }
+
+export default Alerts;

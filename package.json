@@ -2,7 +2,9 @@
   "dependencies": {
     "@types/user-agents": "^1.0.1",
     "cli-progress": "^3.9.0",
+    "colors": "^1.4.0",
     "node-wav-player": "^0.2.0",
+    "nodemon": "^2.0.7",
     "play-sound": "^1.1.3",
     "puppeteer": "^10.0.0",
     "sound-play": "^1.1.0",
@@ -11,7 +13,9 @@
     "user-agents": "^1.0.672"
   },
   "scripts": {
-    "start": "ts-node src/start.ts"
+    "start": "nodemon src/start.ts",
+    "lint": "eslint src/**/*.ts",
+    "format": "eslint src/**/*.ts --fix"
   },
   "engines": {
     "node": ">=14"
@@ -19,6 +23,11 @@
   "devDependencies": {
     "@types/cli-progress": "^3.9.1",
     "@types/play-sound": "^1.1.0",
-    "@types/puppeteer": "^5.4.3"
+    "@types/puppeteer": "^5.4.3",
+    "@typescript-eslint/eslint-plugin": "^4.28.2",
+    "@typescript-eslint/parser": "^4.28.2",
+    "eslint": "^7.30.0",
+    "eslint-config-airbnb-typescript": "^12.3.1",
+    "eslint-plugin-import": "^2.23.4"
   }
 }
