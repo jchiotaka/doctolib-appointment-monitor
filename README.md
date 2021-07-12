@@ -1,4 +1,4 @@
-# Doctolib Appointment Checker
+# Doctolib Appointment Monitor
 
 This is a small Node.JS project that I maintain (barely) in me free time after work. There are a lot of things missing
 or done quickly as my primary goal is to get an appointment and not write a state of the art scraper tool.
